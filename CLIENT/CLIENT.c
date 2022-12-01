@@ -20,17 +20,20 @@
 #define DEFAULT_BUFLEN 512
 #define DEFAULT_PORT "27016"
 
+HANDLE hFile;
 WSADATA wsaData;
 SOCKET ConnectSocket = INVALID_SOCKET;
-
 struct addrinfo* result = NULL, * ptr, hints;
-int iResult;
 
-char recvbuf[DEFAULT_BUFLEN] = { 0 };
-int recvbuflen = DEFAULT_BUFLEN;
-char buffer[MAX_PATH] = { 0 };
+DWORD WINAPI ThreadRecv(LPVOID LP);
 
-int __cdecl main(int argc, char** argv) {
+int __cdecl main(int argc, char** argv)
+{
+
+    HANDLE hThread = 0;
+    DWORD IPthread = 0;
+    int iResult;
+    char buffer[MAX_PATH] = { 0 };
 
     // Initialize Winsock
     iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
@@ -82,78 +85,71 @@ int __cdecl main(int argc, char** argv) {
         break;
     }
 
+    hThread = CreateThread(0, 0, ThreadRecv,
+        0, 0, &IPthread);
+    if (hThread == INVALID_HANDLE_VALUE)
+        goto close;
+
     BOOL isRunning_ = TRUE;
     while (isRunning_ == TRUE) {
         printf("Enter message:\n");
         scanf_s("%s", buffer, sizeof(buffer));
-         
-        // Send an initial buffer
-        iResult = send(ConnectSocket, buffer,
-            (int)strlen(buffer), 0);
-        if (strncmp(buffer, "bye", strlen("bye")) == 0)
+
+        if (strncmp(buffer, "bye", strlen("bye")) == 0) {
+            // Send an initial buffer
+            iResult = send(ConnectSocket, buffer,
+                (int)strlen(buffer), 0);
             isRunning_ = FALSE;
+        } // Send file
+        else if (strncmp(buffer, "file-", strlen("file-")) == 0) {
+            char* fName = { strtok(buffer, "file- ") };
 
-        //senf file
-        else if (strncmp(buffer, "file", strlen("file")) == 0) {
-            char *fName = { strtok(buffer, "file ") };
-                char data[1024];
+            hFile = CreateFileA(fName,
+                GENERIC_READ |  // read and write access 
+                GENERIC_WRITE,
+                0,              // no sharing 
+                NULL,           // default security attributes
+                OPEN_EXISTING,  // opens existing pipe 
+                0,              // default attributes 
+                NULL);          // no template file
+            if (hFile != INVALID_HANDLE_VALUE) {
+                // file transfer warning
+                send(ConnectSocket, buffer,
+                    sizeof(buffer), NULL);
 
-                DWORD cbRead;
-                HANDLE hFile = CreateFileA(fName, 
-                    GENERIC_READ |  // read and write access 
-                    GENERIC_WRITE,
-                    0,              // no sharing 
-                    NULL,           // default security attributes
-                    OPEN_EXISTING,  // opens existing pipe 
-                    0,              // default attributes 
-                    NULL);          // no template file 
-                if (hFile == NULL)
-                {
-                    printf("error created handle of file %d", GetLastError());
-                    continue;
-                }
-                int size = GetFileSize(hFile, 0);
-                send(ConnectSocket, (char*)&size, sizeof(size), NULL);
+                // file size transfer
+                send(ConnectSocket, (char*)GetFileSize(hFile, 0),
+                    sizeof(GetFileSize(hFile, 0)), NULL);
 
-                int shet = size;
-                while (shet > 0) {
+                DWORD dwBytesRead;
+                char buffer[4096];
 
-                     ReadFile(
-                         hFile,    // pipe handle
-                         data,    // buffer to receive reply
-                         1024 * sizeof(char),  // size of buffer                                    
-                         &cbRead,  // number of bytes read                                             
-                         NULL);
-
-                     send(ConnectSocket, data, cbRead, 0);
-
-                    shet -= cbRead;
-                }
+                do // Sending file
+                    if (ReadFile(hFile, buffer, 4096, &dwBytesRead, NULL))
+                        send(ConnectSocket, buffer, dwBytesRead, 0);
+                while (dwBytesRead == GetFileSize(hFile, 0));
+            }
+            else if (hFile == NULL) {
+                printf("error created handle of file %d",
+                    GetLastError());
+                continue;
+            }
+            CloseHandle(hFile);
         }
+        else {
+            iResult = send(ConnectSocket, buffer,
+                (int)strlen(buffer), 0);
+        }
+
         if (iResult == SOCKET_ERROR)
             isRunning_ = FALSE;
-
-        // Get an initial buffer
-        memset(recvbuf, 0, sizeof(recvbuf));
-        iResult = recv(ConnectSocket,
-            recvbuf, recvbuflen, 0);
-
-        if (iResult > 0)
-            printf("New message: %s\n", recvbuf);
-        else if (iResult == 0)
-            isRunning_ = FALSE;
-        else {
-            printf("recv failed with error: %d\n",
-                WSAGetLastError());
-            isRunning_ = FALSE;
-        }
-        memset(recvbuf, 0, sizeof(recvbuf));
     }
 
     freeaddrinfo(result);
     printf("Client disconnected!\n");
 
-    // shutdown the connection since no more data will be sent
+    // shutdown the connection since no more data 
+    // will be sent
     iResult = shutdown(ConnectSocket, SD_SEND);
     if (iResult == SOCKET_ERROR) {
         printf("shutdown failed with error: %d\n",
@@ -164,30 +160,51 @@ int __cdecl main(int argc, char** argv) {
     }
 
     // cleanup
+close:
+    CloseHandle(hThread);
     closesocket(ConnectSocket);
     WSACleanup();
     return 0;
 }
 
 BOOL ServerRecvAllBytes(SOCKET connection, char* data, int totalbytes) {
+
     int totalbytesreceived = 0;
+
+    hFile = CreateFileA(data,
+        GENERIC_READ |  // read and write access 
+        GENERIC_WRITE,
+        0,              // no sharing 
+        NULL,           // default security attributes
+        OPEN_EXISTING,  // opens existing pipe 
+        0,              // default attributes 
+        NULL);          // no template file
 
     // if buffer is bigger then maximum allowed
     if (totalbytes > maxBufferSize) {
 
         //while full buffer not received
         while (totalbytesreceived < totalbytes) {
+
             int bytesrecv = 0;
             int bytesleft = totalbytes - totalbytesreceived;
 
-            // if there is still more left then maximum size keep recv full size
+            // if there is still more left then maximum 
+            // size keep recv full size
             if (bytesleft >= maxBufferSize) {
                 while (bytesrecv < maxBufferSize) {
 
-                    int ReturnCheck = recv(connection, data + totalbytesreceived,
+                    int ReturnCheck = recv(connection,
+                        data + totalbytesreceived,
                         maxBufferSize - bytesrecv, NULL);
                     if (ReturnCheck == SOCKET_ERROR)
                         return FALSE;
+
+                    WriteFile(hFile,
+                        data,
+                        totalbytes,
+                        (DWORD)sizeof(data),
+                        0);
 
                     bytesrecv += ReturnCheck;
                     totalbytesreceived += ReturnCheck;
@@ -195,10 +212,20 @@ BOOL ServerRecvAllBytes(SOCKET connection, char* data, int totalbytes) {
             }
             else { // if left less then maximum size recv last bytes left 
                 while (bytesrecv < bytesleft) {
-                    int ReturnCheck = recv(connection, data + totalbytesreceived,
+
+                    int ReturnCheck = recv(connection,
+                        data + totalbytesreceived,
                         bytesleft - bytesrecv, NULL);
+
                     if (ReturnCheck == SOCKET_ERROR)
                         return FALSE;
+
+                    WriteFile(hFile,
+                        data,
+                        totalbytes,
+                        (DWORD)sizeof(data),
+                        0);
+
                     bytesrecv += ReturnCheck;
                     totalbytesreceived += ReturnCheck;
                 }
@@ -219,32 +246,35 @@ BOOL ServerRecvAllBytes(SOCKET connection, char* data, int totalbytes) {
     return TRUE;
 }
 
-DWORD WINAPI ThreadRecv(LPVOID LP)
-{
+DWORD WINAPI ThreadRecv(LPVOID LP) {
+    char* recvbuf[DEFAULT_BUFLEN] = { 0 };
+    int iResult = 0;
+
     while (1) {
         // Get an initial buffer
         memset(recvbuf, 0, sizeof(recvbuf));
         iResult = recv(ConnectSocket,
-            recvbuf, recvbuflen, 0);
+            recvbuf, sizeof(recvbuf), 0);
 
         if (iResult > 0) {
-            char* checkfile = "file ";
+
+            char* checkfile = "file- ";
             char* fil = strstr(recvbuf, checkfile);
 
             if (fil != NULL) {
-                char* fName = strcat(checkfile, recvbuf);
+
                 iResult = recv(ConnectSocket,
-                    recvbuf, recvbuflen, 0);
+                    recvbuf, (int)DEFAULT_BUFLEN, 0);
+
                 if (iResult > 0)
-                    ServerRecvAllBytes(ConnectSocket, LP, recvbuflen);
+                    ServerRecvAllBytes(ConnectSocket, strcat(checkfile, recvbuf) , sizeof(recvbuf));
             }
             else {
                 printf("New message: %s\n", recvbuf);
-
             }
         }
         else if (iResult == 0)
-            break;
+            continue;
         else {
             printf("recv failed with error: %d\n",
                 WSAGetLastError());

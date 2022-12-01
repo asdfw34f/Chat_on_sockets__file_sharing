@@ -1,11 +1,13 @@
 ﻿#undef UNICODE
 #define WIN32_LEAN_AND_MEAN
+#define _CRT_SECURE_NO_WARNINGS
 
 #include <windows.h>
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 
 // Need to link with Ws2_32.lib
 #pragma comment (lib, "Ws2_32.lib")
@@ -14,6 +16,7 @@
 #define DEFAULT_BUFLEN 512
 #define DEFAULT_PORT "27016"
 #define MAX 256
+#define maxBufferSize 8192
 
 WSADATA wsaData;
 int iResult;
@@ -32,28 +35,128 @@ int recvbuflen = DEFAULT_BUFLEN;
 
 HANDLE ThreadClient[2], object;
 DWORD IDPthreadClient;
+HANDLE hFile;
+
+BOOL ServerRecvAllBytes(SOCKET connection, char* data, int totalbytes) {
+
+    int totalbytesreceived = 0;
+
+    hFile = CreateFileA(data,
+        GENERIC_READ |  // read and write access 
+        GENERIC_WRITE,
+        0,              // no sharing 
+        NULL,           // default security attributes
+        OPEN_EXISTING,  // opens existing pipe 
+        0,              // default attributes 
+        NULL);          // no template file
+
+    // if buffer is bigger then maximum allowed
+    if (totalbytes > maxBufferSize) {
+
+        //while full buffer not received
+        while (totalbytesreceived < totalbytes) {
+
+            int bytesrecv = 0;
+            int bytesleft = totalbytes - totalbytesreceived;
+
+            // if there is still more left then maximum 
+            // size keep recv full size
+            if (bytesleft >= maxBufferSize) {
+                while (bytesrecv < maxBufferSize) {
+
+                    int ReturnCheck = recv(connection,
+                        data + totalbytesreceived,
+                        maxBufferSize - bytesrecv, NULL);
+                    if (ReturnCheck == SOCKET_ERROR)
+                        return FALSE;
+
+                    WriteFile(hFile,
+                        data,
+                        totalbytes,
+                        (DWORD)sizeof(data),
+                        0);
+
+                    bytesrecv += ReturnCheck;
+                    totalbytesreceived += ReturnCheck;
+                }
+            }
+            else { // if left less then maximum size recv last bytes left 
+                while (bytesrecv < bytesleft) {
+
+                    int ReturnCheck = recv(connection,
+                        data + totalbytesreceived,
+                        bytesleft - bytesrecv, NULL);
+
+                    if (ReturnCheck == SOCKET_ERROR)
+                        return FALSE;
+
+                    WriteFile(hFile,
+                        data,
+                        totalbytes,
+                        (DWORD)sizeof(data),
+                        0);
+
+                    bytesrecv += ReturnCheck;
+                    totalbytesreceived += ReturnCheck;
+                }
+            }
+        }
+    }
+    else { // if buffer is not bigger then maximum allowed
+        while (totalbytesreceived < totalbytes) {
+
+            int ReturnCheck = recv(connection, data + totalbytesreceived,
+                totalbytes - totalbytesreceived, NULL);
+            if (ReturnCheck == SOCKET_ERROR) {
+                return FALSE;
+            }
+            totalbytesreceived += ReturnCheck;
+        }
+    }
+    return TRUE;
+}
 
 DWORD WINAPI client(LPVOID lp)
 {
     SOCKET client;
     memcpy(&client, lp, sizeof(SOCKET));
     BOOL isRunning_ = TRUE;
+    char* recvbuf[DEFAULT_BUFLEN] = { 0 };
 
     while (isRunning_ == TRUE) {
         char buffer[MAX_PATH] = { 0 };
         int iResult_ = recv(client,
             buffer, sizeof(buffer), 0);
 
-        if (iResult_ > 0) {
+        if (ClientSocket[1] != INVALID_SOCKET && iResult_ > 0 ) {
+            char* checkfile = "file- ";
+            char* fil = strstr(recvbuf, checkfile);
+
+            if (fil != NULL) {
+
+                iResult = recv(client,
+                    recvbuf, (int)DEFAULT_BUFLEN, 0);
+
+                if (iResult > 0)
+                    if (ClientSocket[0] == client) {
+                        ServerRecvAllBytes(ClientSocket[1],
+                            strcat(checkfile, recvbuf), sizeof(recvbuf));
+                    }
+                    else {
+                        ServerRecvAllBytes(ClientSocket[0],
+                            strcat(checkfile, recvbuf), sizeof(recvbuf));
+                    }
+            }
+
             printf_s("Client [%d] message: %s\n",
                 client, buffer);
             if (ClientSocket[1] != INVALID_SOCKET)
                 if (ClientSocket[0] == client)
-                    iResult_ = send(ClientSocket[1],
-                        buffer, (int)strlen(buffer), 0);
+                    iResult_ = send(ClientSocket[1], buffer,
+                        (int)strlen(buffer), 0);
                 else
-                    iResult_ = send(ClientSocket[0],
-                        buffer, (int)strlen(buffer), 0);
+                    iResult_ = send(ClientSocket[0], buffer,
+                        (int)strlen(buffer), 0);
         }
         else if (iResult_ == 0) {
             printf_s("Connection closed\n");
@@ -74,7 +177,8 @@ int __cdecl main(void)
     // Initialize Winsock
     iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
     if (iResult != 0) {
-        printf_s("WSAStartup failed with error: %d\n", iResult);
+        printf_s("WSAStartup failed with error: %d\n", 
+            iResult);
         return 1;
     }
 
@@ -88,7 +192,8 @@ int __cdecl main(void)
     iResult = getaddrinfo(NULL,
         DEFAULT_PORT, &hints, &result);
     if (iResult != 0) {
-        printf_s("getaddrinfo failed with error: %d\n", iResult);
+        printf_s("getaddrinfo failed with error: %d\n",
+            iResult);
         WSACleanup();
         return 1;
     }
