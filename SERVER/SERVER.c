@@ -121,7 +121,7 @@ DWORD WINAPI client(LPVOID lp)
     SOCKET client;
     memcpy(&client, lp, sizeof(SOCKET));
     BOOL isRunning_ = TRUE;
-    char* recvbuf[DEFAULT_BUFLEN] = { 0 };
+    char* recvbuf[260] = { 0 };
 
     while (isRunning_ == TRUE) {
         char buffer[MAX_PATH] = { 0 };
@@ -129,25 +129,48 @@ DWORD WINAPI client(LPVOID lp)
             buffer, sizeof(buffer), 0);
 
         if (ClientSocket[1] != INVALID_SOCKET && iResult_ > 0 ) {
-            char* checkfile = "file- ";
-            char* fil = strstr(recvbuf, checkfile);
-
-            if (fil != NULL) {
-
-                iResult = recv(client,
-                    recvbuf, (int)DEFAULT_BUFLEN, 0);
-
-                if (iResult > 0)
-                    if (ClientSocket[0] == client) {
-                        ServerRecvAllBytes(ClientSocket[1],
-                            strcat(checkfile, recvbuf), sizeof(recvbuf));
-                    }
-                    else {
-                        ServerRecvAllBytes(ClientSocket[0],
-                            strcat(checkfile, recvbuf), sizeof(recvbuf));
-                    }
-            }
-
+          // char* checkfile = "file- ";
+          // char* fil = strstr(recvbuf, checkfile);
+          //
+          // if (fil != NULL) {
+          //
+          //     // Get size of file
+          //     iResult = recv(client,
+          //         recvbuf, (int)DEFAULT_BUFLEN, 0);
+          //
+          //     if (iResult > 0)
+          //         if (fil != NULL) {
+          //             int size = 0;
+          //             char* filename = "";
+          //             iResult = recv(ConnectSocket,
+          //                 &size, sizeof(int), 0);
+          //             if (iResult > 0) {
+          //                 char buffer[260] = { 0 };
+          //                 int bytesrecv = 0;
+          //
+          //                 while (bytesrecv < size) {
+          //
+          //                     int ReturnCheck = recv(ConnectSocket,
+          //                         buffer,
+          //                         sizeof(buffer), NULL);
+          //
+          //                     if (ReturnCheck == SOCKET_ERROR) {
+          //                         printf("recv failed with error: %d\n",
+          //                             WSAGetLastError());
+          //                         break;
+          //                     }
+          //                     if (client == ClientSocket[0]) 
+          //                         send(ClientSocket[1], buffer, dwBytesRead, 0);
+          //                     else
+          //                         send(ClientSocket[0], buffer, dwBytesRead, 0);
+          //
+          //                     memset(buffer, 0, sizeof(buffer));
+          //                     bytesrecv += ReturnCheck;
+          //                 }
+          //             }
+          //         }
+          // }
+          //
             printf_s("Client [%d] message: %s\n",
                 client, buffer);
             if (ClientSocket[1] != INVALID_SOCKET)
