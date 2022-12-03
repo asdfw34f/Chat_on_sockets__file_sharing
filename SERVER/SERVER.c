@@ -39,36 +39,6 @@ DWORD WINAPI client(LPVOID lp)
 
         if (ClientSocket[1] != INVALID_SOCKET && iResult > 0 ) {
 
-            if (recvbuf == "file- ") {
-                memset(recvbuf, 0, strlen(recvbuf) + 1);
-
-                // Get size of file
-                iResult = recv(client,
-                    recvbuf, (int)MAX_PATH, 0);
-                int totalsize = (int)recvbuf;
-                int recvsize = 0;
-                iResult = 0;
-
-                while (recvsize < totalsize) {
-                    memset(recvbuf, 0, strlen(recvbuf) +1);
-
-                    iResult = recv(client,
-                        recvbuf, (int)MAX_PATH, 0);
-
-                    if (ClientSocket[1] != INVALID_SOCKET)
-                        if (ClientSocket[0] == client)
-                            iResult = send(ClientSocket[1], recvbuf,
-                                (int)strlen(recvbuf), 0);
-                        else
-                            iResult = send(ClientSocket[0], recvbuf,
-                                (int)strlen(recvbuf), 0);
-
-                    recvsize = +iResult;
-                }
-                continue;
-            }
-            else {
-
                 printf_s("Client [%d] message: %s\n",
                     client, recvbuf);
 
@@ -79,7 +49,6 @@ DWORD WINAPI client(LPVOID lp)
                     else
                         iResult_ = send(ClientSocket[0], recvbuf,
                             (int)strlen(recvbuf), 0);
-            }
 
         }
         else if (iResult_ == 0) {

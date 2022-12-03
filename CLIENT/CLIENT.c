@@ -16,29 +16,30 @@
 #pragma comment (lib, "Mswsock.lib")
 #pragma comment (lib, "AdvApi32.lib")
 
-#define maxBufferSize 8192
-#define DEFAULT_BUFLEN 512
 #define DEFAULT_PORT "27016"
 
 WSADATA wsaData;
 SOCKET ConnectSocket = INVALID_SOCKET;
 struct addrinfo* result = NULL, * ptr, hints;
-
+HANDLE resurs = 0;
 DWORD WINAPI ThreadRecv(LPVOID LP);
 
-void fName_Cut(char buf[MAX_PATH], char* cmd)
+void* fName_Cut(char buf[MAX_PATH], char* cmd, char fNAME[MAX_PATH])
 {
-    char fName[DEFAULT_BUFLEN] = { 0 };
     int j = 0;
+    int i = strlen(cmd);
 
-    for (int i = strlen(cmd); i < strlen(buf); i++, j++)
-        fName[j] = buf[i];
-
-    buf = fName;
+    for (i; i < strlen(buf); i++) {
+        fNAME[j] = buf[i];
+        j++;
+    }
+    fNAME[j] += '\0';
 }
 
 int __cdecl main(int argc, char** argv)
 {
+    resurs = CreateMutexA(0, FALSE, 0);
+
     HANDLE hThread = 0;
     DWORD IPthread = 0;
 
@@ -95,6 +96,7 @@ int __cdecl main(int argc, char** argv)
         break;
     }
 
+    // Create a thread for get message from server
     hThread = CreateThread(0, 0, ThreadRecv,
         0, 0, &IPthread);
     if (hThread == INVALID_HANDLE_VALUE)
@@ -103,7 +105,7 @@ int __cdecl main(int argc, char** argv)
     BOOL isRunning_ = TRUE;
     while (isRunning_ == TRUE) {
         printf("Enter message:\n");
-        scanf_s("%s", buffer, sizeof(buffer));
+        char* rstr = gets(buffer);
 
         //Close the connect
         if (strncmp(buffer, "bye", strlen("bye")) == 0) {
@@ -113,10 +115,14 @@ int __cdecl main(int argc, char** argv)
             isRunning_ = FALSE;
         } // Send file
         else if (strncmp(buffer, "file-", strlen("file-")) == 0) {
-            // Cut the file path
-            fName_Cut(buffer, (char*)"file- ");
+            // Create a Mutex
+            WaitForSingleObject(resurs, INFINITE);
 
-            HANDLE hFile = CreateFileA(buffer,
+            // Cut the file path
+            char fNAME[MAX_PATH] = { 0 };
+            fName_Cut(buffer, (char*)"file- ", fNAME);
+
+            HANDLE hFile = CreateFileA(fNAME,
                 GENERIC_ALL,    // read and write access 
                 FILE_SHARE_READ,              // no sharing 
                 NULL,           // default security attributes
@@ -134,31 +140,31 @@ int __cdecl main(int argc, char** argv)
                 send(ConnectSocket, (char*)&size,
                     sizeof(size), NULL);
 
-                DWORD dwBytesRead =0;
+                DWORD dwBytesRead = 0;
                 memset(buffer, 0, sizeof(buffer));
 
                 while (size > 0) {
-                    if (ReadFile(hFile, buffer, sizeof(buffer), &dwBytesRead, NULL)) {
+                    if (ReadFile(hFile, &buffer, sizeof(buffer), &dwBytesRead, NULL)) {
+                        printf("\t\tRead file! %s\n", buffer);
                         send(ConnectSocket, buffer, dwBytesRead, 0);
                         size -= dwBytesRead;
                     }
                 }
-                *buffer = "@ENDFILE";
-                send(ConnectSocket, buffer, dwBytesRead, 0);
-            } // Error Create handle file
+            } 
+            // Error Create handle file
             else {
                 printf("error created handle of file %s, code: %d\n",
                     buffer,
                     GetLastError());
                 continue;
             }
+            ReleaseMutex(resurs);
             CloseHandle(hFile);
         }
         else {
             iResult = send(ConnectSocket, buffer,
                 (int)strlen(buffer), 0);
         }
-
         if (iResult == SOCKET_ERROR)
             isRunning_ = FALSE;
     }
@@ -185,52 +191,54 @@ close:
     return 0;
 }
 
-DWORD WINAPI ThreadRecv(LPVOID LP) {
-
-    char* recvbuf[DEFAULT_BUFLEN] = { 0 };
+DWORD WINAPI ThreadRecv(LPVOID LP) 
+{
+    char* recvbuf[MAX_PATH] = { 0 };
     int iResult = 0;
 
     while (1) {
         // Get an initial buffer
         memset(recvbuf, 0, sizeof(recvbuf));
-        iResult = recv(ConnectSocket,
-            recvbuf, sizeof(recvbuf), 0);
+        iResult = recv(ConnectSocket, recvbuf, 
+            sizeof(recvbuf), 0);
 
         if (iResult > 0) {
             // Check on a file message
-            if (recvbuf == "file-") {
+            if (strncmp(recvbuf, "file-", strlen("file-")) == 0) {
 
                 int size = 0;
                 char* filename = "C:\\Users\\Daniil\\Desktop\\NEW_FILE.txt";
-                
+
                 // Get file size
                 iResult = recv(ConnectSocket, &size, sizeof(int), 0);
 
-                if (iResult > 0) {
+                if (iResult > 0 && size > 0) {
+                    // Create a Mutex
+                    WaitForSingleObject(resurs, INFINITE);
 
-                    char buffer[260] = { 0 };
-                    int bytesrecv = 0;
 
                     // CreateFile
-                        HANDLE hFile = CreateFileA(filename,
-                            GENERIC_ALL,    // read and write access 
-                            0,              // no sharing 
-                            NULL,           // default security attributes
-                            CREATE_ALWAYS,  // opens existing pipe 
-                            0,              // default attributes 
-                            0);             // no template file
-                        if (hFile == INVALID_HANDLE_VALUE) {
-                            printf("failed create file code: %d",
-                                GetLastError()); 
-                            continue;
-                        }
+                    HANDLE newFile = CreateFileA(filename,
+                        GENERIC_ALL,    // read and write access 
+                        0,              // no sharing 
+                        NULL,           // default security attributes
+                        CREATE_ALWAYS,  // opens existing pipe 
+                        0,              // default attributes 
+                        0);             // no template file
+
+                    if (newFile == INVALID_HANDLE_VALUE) {
+                        printf("failed create file code: %d",
+                            GetLastError());
+                        continue;
+                    }
+                    printf("\t\tCreate file!\n");
 
                     // get the file from server
-                    while (bytesrecv < size || buffer != "@ENDFILE") {
-                        memset(buffer, 0, sizeof(buffer));
+                    int ReturnCheck = 0;
+                    char buffer[260] = { 0 };
 
-                        int ReturnCheck = recv(ConnectSocket,
-                            buffer,
+                    while (size > 0) {
+                        ReturnCheck = recv(ConnectSocket, &buffer,
                             sizeof(buffer), NULL);
 
                         if (ReturnCheck == SOCKET_ERROR) {
@@ -238,23 +246,34 @@ DWORD WINAPI ThreadRecv(LPVOID LP) {
                                 WSAGetLastError());
                             break;
                         }
-                        else if (buffer == "END_FILE")
-                            break;
 
-                        BOOL right = WriteFile(hFile, // HANDLE OF FILE
+                        // Writing to file 
+                        BOOL right = WriteFile(
+                            newFile, // HANDLE OF FILE
                             buffer, // BUFFER FOR WRITE
-                            size, // SIZE OF FILE
-                            ReturnCheck, // BYTES WRITTEN
-                            0); // IVERLOPED
+                            sizeof(buffer), // SIZE OF FILE
+                            &ReturnCheck, // BYTES WRITTEN
+                            NULL); // IVERLOPED
+
                         if (right != TRUE) {
-                            printf("failed writing to the file, code: %d", GetLastError());
+                            printf("failed writing to the file, code: %d\n", GetLastError());
                             break;
                         }
-                        bytesrecv += ReturnCheck;
+
+                            SetFilePointer(newFile, sizeof(buffer),
+                                NULL, FILE_CURRENT);
+
+                        printf("\t\tWrite file! %s\n", buffer);
+                        memset(buffer, 0, sizeof(buffer));
+
+                        size -= ReturnCheck;
                     }
+                    ReleaseMutex(resurs);
+                    CloseHandle(newFile);
                 }
-            }// print the message
-            else { 
+            }
+            // print the message
+            else {
                 printf("New message: %s\n", recvbuf);
             }
         }
