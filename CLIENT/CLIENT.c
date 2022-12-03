@@ -105,25 +105,25 @@ int __cdecl main(int argc, char** argv)
         printf("Enter message:\n");
         scanf_s("%s", buffer, sizeof(buffer));
 
+        //Close the connect
         if (strncmp(buffer, "bye", strlen("bye")) == 0) {
             // Send an initial buffer
             iResult = send(ConnectSocket, buffer,
                 (int)strlen(buffer), 0);
             isRunning_ = FALSE;
         } // Send file
-        else if ((int)strstr(buffer, "file- ") >= 0) {
-
+        else if (strncmp(buffer, "file-", strlen("file-")) == 0) {
+            // Cut the file path
             fName_Cut(buffer, (char*)"file- ");
 
             HANDLE hFile = CreateFileA(buffer,
-                GENERIC_READ |  // read and write access 
-                GENERIC_WRITE | 
-                GENERIC_ALL,
-                0,              // no sharing 
+                GENERIC_ALL,    // read and write access 
+                FILE_SHARE_READ,              // no sharing 
                 NULL,           // default security attributes
-                OPEN_EXISTING,  // opens existing pipe 
+                OPEN_ALWAYS,  // opens existing pipe 
                 0,              // default attributes 
                 NULL);          // no template file
+
             if (hFile != INVALID_HANDLE_VALUE) {
                 // file transfer warning
                 send(ConnectSocket, "file- ",
@@ -134,18 +134,21 @@ int __cdecl main(int argc, char** argv)
                 send(ConnectSocket, (char*)&size,
                     sizeof(size), NULL);
 
-                DWORD dwBytesRead;
+                DWORD dwBytesRead =0;
                 memset(buffer, 0, sizeof(buffer));
 
                 while (size > 0) {
                     if (ReadFile(hFile, buffer, sizeof(buffer), &dwBytesRead, NULL)) {
                         send(ConnectSocket, buffer, dwBytesRead, 0);
-                    size -= dwBytesRead;
+                        size -= dwBytesRead;
                     }
-                } 
-            }
-            else if (hFile == NULL) {
-                printf("error created handle of file %d",
+                }
+                *buffer = "@ENDFILE";
+                send(ConnectSocket, buffer, dwBytesRead, 0);
+            } // Error Create handle file
+            else {
+                printf("error created handle of file %s, code: %d\n",
+                    buffer,
                     GetLastError());
                 continue;
             }
@@ -194,9 +197,8 @@ DWORD WINAPI ThreadRecv(LPVOID LP) {
             recvbuf, sizeof(recvbuf), 0);
 
         if (iResult > 0) {
-            char* checkfile = "file- ";
-
-            if (recvbuf == "file- ") {
+            // Check on a file message
+            if (recvbuf == "file-") {
 
                 int size = 0;
                 char* filename = "C:\\Users\\Daniil\\Desktop\\NEW_FILE.txt";
@@ -211,13 +213,12 @@ DWORD WINAPI ThreadRecv(LPVOID LP) {
 
                     // CreateFile
                         HANDLE hFile = CreateFileA(filename,
-                            GENERIC_READ |  // read and write access 
-                            GENERIC_WRITE | GENERIC_ALL,
+                            GENERIC_ALL,    // read and write access 
                             0,              // no sharing 
                             NULL,           // default security attributes
-                            OPEN_EXISTING,  // opens existing pipe 
+                            CREATE_ALWAYS,  // opens existing pipe 
                             0,              // default attributes 
-                            NULL);          // no template file
+                            0);             // no template file
                         if (hFile == INVALID_HANDLE_VALUE) {
                             printf("failed create file code: %d",
                                 GetLastError()); 
@@ -225,7 +226,8 @@ DWORD WINAPI ThreadRecv(LPVOID LP) {
                         }
 
                     // get the file from server
-                    while (bytesrecv < size) {
+                    while (bytesrecv < size || buffer != "@ENDFILE") {
+                        memset(buffer, 0, sizeof(buffer));
 
                         int ReturnCheck = recv(ConnectSocket,
                             buffer,
@@ -239,13 +241,15 @@ DWORD WINAPI ThreadRecv(LPVOID LP) {
                         else if (buffer == "END_FILE")
                             break;
 
-                        WriteFile(hFile,
-                            buffer,
-                            ReturnCheck,
-                            NULL,
-                            0);
-
-                        memset(buffer, 0, sizeof(buffer));
+                        BOOL right = WriteFile(hFile, // HANDLE OF FILE
+                            buffer, // BUFFER FOR WRITE
+                            size, // SIZE OF FILE
+                            ReturnCheck, // BYTES WRITTEN
+                            0); // IVERLOPED
+                        if (right != TRUE) {
+                            printf("failed writing to the file, code: %d", GetLastError());
+                            break;
+                        }
                         bytesrecv += ReturnCheck;
                     }
                 }

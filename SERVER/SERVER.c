@@ -65,7 +65,6 @@ DWORD WINAPI client(LPVOID lp)
 
                     recvsize = +iResult;
                 }
-                *recvbuf = "END_FILE";
                 continue;
             }
             else {
