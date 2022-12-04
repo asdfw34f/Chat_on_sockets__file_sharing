@@ -45,7 +45,7 @@ int __cdecl main(int argc, char** argv)
     DWORD IPthread = 0;
 
     int iResult;
-    char buffer[MAX_PATH] = { 0 };
+    char buffer[SIZE_PART_FILE] = { 0 };
 
     // Initialize Winsock
     iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
@@ -133,16 +133,19 @@ int __cdecl main(int argc, char** argv)
                 OPEN_ALWAYS,        // opens existing pipe 
                 0,                  // default attributes 
                 NULL);              // no template file
-
-            if (hFile != INVALID_HANDLE_VALUE) {
+            
+            *buffer = "file- ";
+                if (hFile != INVALID_HANDLE_VALUE) {
                 // file transfer warning
                 send(ConnectSocket, "file- ",
-                    strlen("file- "), NULL);
+                    sizeof("file- "), NULL);
 
                 // file size transfer
                 int size = GetFileSize(hFile, 0);
                 send(ConnectSocket, (char*)&size,
                     sizeof(size), NULL);
+
+                printf("\n\t\tsize: %d\n", size);
 
                 memset(buff_file, 0, sizeof(buff_file));
 
@@ -203,13 +206,13 @@ close:
 
 DWORD WINAPI ThreadRecv(LPVOID LP) 
 {
-    char* recvbuf[MAX_PATH] = { 0 };
+    char* recvbuf[SIZE_PART_FILE] = { 0 };
 
     while (1) {
         // Get an initial buffer
         memset(recvbuf, 0, sizeof(recvbuf));
         int iResult = recv(ConnectSocket,
-            recvbuf,
+            &recvbuf,
             sizeof(recvbuf),
             0);
 
@@ -217,11 +220,12 @@ DWORD WINAPI ThreadRecv(LPVOID LP)
             // Check on a file message
             if (strncmp(recvbuf, "file-", strlen("file-")) == 0) {
                 // Get file size
-                long long int size = 0;
+                int size = 0;
                 iResult = recv(ConnectSocket,
                     &size,
-                    sizeof(long long int),
+                    sizeof(int),
                     0);
+                printf("\n\t\tsize: %d\n", size);
 
                 if (iResult > 0 && size > 0) {
                     char buff_file[SIZE_PART_FILE] = "C:\\Users\\Daniil\\Desktop\\NEW_FILE.exe";
@@ -280,8 +284,8 @@ DWORD WINAPI ThreadRecv(LPVOID LP)
                             printf("%0X", buff_file[j]);
 
                         size -= ReturnCheck;
-                        ReturnCheck = 0;
                         memset(buff_file, 0, ReturnCheck);
+                        ReturnCheck = 0;
                     }
                     ReleaseMutex(resurs);
                     CloseHandle(newFile);

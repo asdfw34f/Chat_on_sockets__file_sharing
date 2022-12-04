@@ -28,7 +28,7 @@ DWORD IDPthreadClient;
 DWORD WINAPI client(LPVOID lp)
 {
     BOOL isRunning_ = TRUE;
-    char* recvbuf[260] = { 0 };
+    char* recvbuf[SIZE_PART_FILE] = { 0 };
     BOOL iResult_ = TRUE;
     SOCKET client;
     memcpy(&client, lp, sizeof(SOCKET));
@@ -39,7 +39,7 @@ DWORD WINAPI client(LPVOID lp)
             recvbuf, sizeof(recvbuf), 0);
 
         if (ClientSocket[1] != INVALID_SOCKET && iResult > 0 ) {
-            // Check on a file message
+            /*// Check on a file message
             if (strncmp(recvbuf, "file-", strlen("file-")) == 0) {
                 
                 if (ClientSocket[1] != INVALID_SOCKET)
@@ -100,11 +100,10 @@ DWORD WINAPI client(LPVOID lp)
                         memset(buff_file, 0, ReturnCheck);
                     }
                 }
-            }
+            }*/
                 printf_s("Client [%d] message\n",
                     client);
 
-                if (ClientSocket[1] != INVALID_SOCKET)
                     if (ClientSocket[0] == client)
                         iResult_ = send(ClientSocket[1], recvbuf,
                             sizeof(recvbuf), 0);
