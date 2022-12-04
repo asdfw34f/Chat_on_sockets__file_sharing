@@ -15,6 +15,7 @@
 
 // PORT
 #define DEFAULT_PORT "27016"
+#define SIZE_PART_FILE 1024
 
 WSADATA wsaData;
 int iResult;
@@ -38,7 +39,68 @@ DWORD WINAPI client(LPVOID lp)
             recvbuf, sizeof(recvbuf), 0);
 
         if (ClientSocket[1] != INVALID_SOCKET && iResult > 0 ) {
+            // Check on a file message
+            if (strncmp(recvbuf, "file-", strlen("file-")) == 0) {
+                
+                if (ClientSocket[1] != INVALID_SOCKET)
+                    if (ClientSocket[0] == client)
+                        iResult = send(ClientSocket[1], recvbuf,
+                            sizeof(recvbuf), 0);
+                    else
+                        iResult = send(ClientSocket[0], recvbuf,
+                            sizeof(recvbuf), 0);
 
+                // Get file size
+                long long int size = 0;
+                iResult = recv(client,
+                    &size,
+                    sizeof(long long int),
+                    0);
+
+                if (iResult > 0 && size > 0) {
+                    char buff_file[SIZE_PART_FILE] = { 0 };
+
+                    if (ClientSocket[1] != INVALID_SOCKET)
+                        if (ClientSocket[0] == client)
+                            iResult = send(ClientSocket[1], size,
+                                sizeof(size), 0);
+                        else
+                            iResult = send(ClientSocket[0], size,
+                                sizeof(size), 0);
+
+                    // get the file from server
+                    int ReturnCheck = 0;
+                    while (size > 0) {
+                        ReturnCheck = recv(client,
+                            &buff_file,
+                            sizeof(buff_file),
+                            NULL);
+
+                        ReturnCheck = recv(client, &buff_file,
+                            sizeof(buff_file), 0);
+
+                        if (ReturnCheck == SOCKET_ERROR) {
+                            printf("recv failed with error: %d\n",
+                                WSAGetLastError());
+                            break;
+                        }
+                        size -= ReturnCheck;
+
+                        if (ClientSocket[1] != INVALID_SOCKET)
+                            if (ClientSocket[0] == client)
+                                ReturnCheck = send(ClientSocket[1], buff_file,
+                                    sizeof(buff_file), 0);
+                            else
+                                ReturnCheck = send(ClientSocket[0], buff_file,
+                                    sizeof(buff_file), 0);
+
+                        size -= ReturnCheck;
+
+                        ReturnCheck = 0;
+                        memset(buff_file, 0, ReturnCheck);
+                    }
+                }
+            }
                 printf_s("Client [%d] message\n",
                     client);
 

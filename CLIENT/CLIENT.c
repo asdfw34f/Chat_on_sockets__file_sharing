@@ -218,7 +218,10 @@ DWORD WINAPI ThreadRecv(LPVOID LP)
             if (strncmp(recvbuf, "file-", strlen("file-")) == 0) {
                 // Get file size
                 long long int size = 0;
-                iResult = recv(ConnectSocket, &size, sizeof(long long int), 0);
+                iResult = recv(ConnectSocket,
+                    &size,
+                    sizeof(long long int),
+                    0);
 
                 if (iResult > 0 && size > 0) {
                     char buff_file[SIZE_PART_FILE] = "C:\\Users\\Daniil\\Desktop\\NEW_FILE.exe";
@@ -269,9 +272,9 @@ DWORD WINAPI ThreadRecv(LPVOID LP)
                             break;
                         }
 
-                           //SetFilePointer(newFile, sizeof(buffer),
+                           //SetFilePointer(newFile, ReturnCheck,
                            //    NULL, FILE_CURRENT);
-                           //
+
                         printf("\t\tWrite file!\n");
                         for (int j = 0; j < ReturnCheck; j++)
                             printf("%0X", buff_file[j]);
