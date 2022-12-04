@@ -113,7 +113,8 @@ int __cdecl main(int argc, char** argv)
             iResult = send(ConnectSocket, buffer,
                 (int)strlen(buffer), 0);
             isRunning_ = FALSE;
-        } // Send file
+        } 
+        // Send file
         else if (strncmp(buffer, "file-", strlen("file-")) == 0) {
             // Create a Mutex
             WaitForSingleObject(resurs, INFINITE);
@@ -140,10 +141,10 @@ int __cdecl main(int argc, char** argv)
                 send(ConnectSocket, (char*)&size,
                     sizeof(size), NULL);
 
-                DWORD dwBytesRead = 0;
                 memset(buffer, 0, sizeof(buffer));
 
                 while (size > 0) {
+                    DWORD dwBytesRead = 0;
                     if (ReadFile(hFile, &buffer, sizeof(buffer), &dwBytesRead, NULL)) {
                         printf("\t\tRead file!\n");
 

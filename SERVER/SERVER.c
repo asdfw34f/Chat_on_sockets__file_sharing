@@ -39,7 +39,7 @@ DWORD WINAPI client(LPVOID lp)
 
         if (ClientSocket[1] != INVALID_SOCKET && iResult > 0 ) {
 
-                printf_s("Client [%d] message: \n",
+                printf_s("Client [%d] message\n",
                     client);
 
                 if (ClientSocket[1] != INVALID_SOCKET)
