@@ -123,12 +123,12 @@ int __cdecl main(int argc, char** argv)
             fName_Cut(buffer, (char*)"file- ", fNAME);
 
             HANDLE hFile = CreateFileA(fNAME,
-                GENERIC_ALL,    // read and write access 
-                FILE_SHARE_READ,              // no sharing 
-                NULL,           // default security attributes
-                OPEN_ALWAYS,  // opens existing pipe 
-                0,              // default attributes 
-                NULL);          // no template file
+                GENERIC_READ,       // read and write access 
+                FILE_SHARE_READ,    // no sharing 
+                NULL,               // default security attributes
+                OPEN_ALWAYS,        // opens existing pipe 
+                0,                  // default attributes 
+                NULL);              // no template file
 
             if (hFile != INVALID_HANDLE_VALUE) {
                 // file transfer warning
@@ -145,9 +145,15 @@ int __cdecl main(int argc, char** argv)
 
                 while (size > 0) {
                     if (ReadFile(hFile, &buffer, sizeof(buffer), &dwBytesRead, NULL)) {
-                        printf("\t\tRead file! %s\n", buffer);
+                        printf("\t\tRead file!\n");
+
+                        for (int j = 0; j< dwBytesRead;j++)
+                            printf("%0X", buffer[j]);
+
                         send(ConnectSocket, buffer, dwBytesRead, 0);
+
                         size -= dwBytesRead;
+                        printf("\n");
                     }
                 }
             } 
@@ -207,7 +213,7 @@ DWORD WINAPI ThreadRecv(LPVOID LP)
             if (strncmp(recvbuf, "file-", strlen("file-")) == 0) {
 
                 int size = 0;
-                char* filename = "C:\\Users\\Daniil\\Desktop\\NEW_FILE.txt";
+                char* filename = "C:\\Users\\Daniil\\Desktop\\NEW_FILE.exe";
 
                 // Get file size
                 iResult = recv(ConnectSocket, &size, sizeof(int), 0);
@@ -215,7 +221,6 @@ DWORD WINAPI ThreadRecv(LPVOID LP)
                 if (iResult > 0 && size > 0) {
                     // Create a Mutex
                     WaitForSingleObject(resurs, INFINITE);
-
 
                     // CreateFile
                     HANDLE newFile = CreateFileA(filename,
@@ -260,12 +265,14 @@ DWORD WINAPI ThreadRecv(LPVOID LP)
                             break;
                         }
 
-                            SetFilePointer(newFile, sizeof(buffer),
-                                NULL, FILE_CURRENT);
+                           //SetFilePointer(newFile, sizeof(buffer),
+                           //    NULL, FILE_CURRENT);
+                           //
+                        printf("\t\tWrite file!\n");
+                        for (int j = 0; j < ReturnCheck; j++)
+                            printf("%0X", buffer[j]);
 
-                        printf("\t\tWrite file! %s\n", buffer);
                         memset(buffer, 0, sizeof(buffer));
-
                         size -= ReturnCheck;
                     }
                     ReleaseMutex(resurs);

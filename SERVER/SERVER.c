@@ -39,16 +39,16 @@ DWORD WINAPI client(LPVOID lp)
 
         if (ClientSocket[1] != INVALID_SOCKET && iResult > 0 ) {
 
-                printf_s("Client [%d] message: %s\n",
-                    client, recvbuf);
+                printf_s("Client [%d] message: \n",
+                    client);
 
                 if (ClientSocket[1] != INVALID_SOCKET)
                     if (ClientSocket[0] == client)
                         iResult_ = send(ClientSocket[1], recvbuf,
-                            (int)strlen(recvbuf), 0);
+                            sizeof(recvbuf), 0);
                     else
                         iResult_ = send(ClientSocket[0], recvbuf,
-                            (int)strlen(recvbuf), 0);
+                            sizeof(recvbuf), 0);
 
         }
         else if (iResult_ == 0) {
