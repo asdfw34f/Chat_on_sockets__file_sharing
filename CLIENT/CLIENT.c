@@ -117,8 +117,6 @@ int __cdecl main(int argc, char** argv)
         } 
         // Send file
         else if (strncmp(buffer, "file-", strlen("file-")) == 0) {
-            
-            char buff_file[SIZE_PART_FILE] = { 0 };
             // Create a Mutex
             WaitForSingleObject(resurs, INFINITE);
 
@@ -134,36 +132,50 @@ int __cdecl main(int argc, char** argv)
                 0,                  // default attributes 
                 NULL);              // no template file
             
-            *buffer = "file- ";
-                if (hFile != INVALID_HANDLE_VALUE) {
+            if (hFile != INVALID_HANDLE_VALUE) {
                 // file transfer warning
                 send(ConnectSocket, "file- ",
                     sizeof("file- "), NULL);
 
                 // file size transfer
-                int size = GetFileSize(hFile, 0);
-                send(ConnectSocket, (char*)&size,
-                    sizeof(size), NULL);
+                DWORD dwBytesRead = 0;
+                long int size = 0;
+
+                size =+ GetFileSize(hFile, 0);
+                iResult = send(ConnectSocket,
+                    (char*)&size,
+                    sizeof(size),
+                    NULL);
+
+                if (iResult <= 0) {
+                    printf("error send file size to server %d",
+                        GetLastError());
+                    break;
+                }
 
                 printf("\n\t\tsize: %d\n", size);
 
-                memset(buff_file, 0, sizeof(buff_file));
-
                 while (size > 0) {
-                    DWORD dwBytesRead = 0;
-                    if (ReadFile(hFile, &buff_file, sizeof(buff_file), &dwBytesRead, NULL)) {
-                        printf("\t\tRead file!\n");
+                    memset(buffer, 0, sizeof(buffer));
+                    if (ReadFile(hFile, &buffer, sizeof(buffer), &dwBytesRead, NULL)) {
+                        printf("\t\tRead file! Size: %d\n", dwBytesRead);
 
-                        for (int j = 0; j< dwBytesRead;j++)
-                            printf("%0X", buff_file[j]);
+                       //for (int j = 0; j < dwBytesRead; j++)
+                       //    printf("%0X", buff_file[j]);
 
-                        send(ConnectSocket, buff_file, dwBytesRead, 0);
-
-                        size -= dwBytesRead;
-                        printf("\n");
+                        iResult = send(ConnectSocket, buffer, dwBytesRead, 0);
+                        if (iResult > 0) {
+                            size =- iResult;
+                            printf("\n");
+                        }
+                        else {
+                            printf("error send file to server %d",
+                                GetLastError());
+                            break;
+                        }
                     }
                 }
-            } 
+            }
             // Error Create handle file
             else {
                 printf("error created handle of file %s, code: %d\n",
@@ -199,6 +211,8 @@ int __cdecl main(int argc, char** argv)
     // cleaning
 close:
     CloseHandle(hThread);
+    CloseHandle(resurs);
+
     closesocket(ConnectSocket);
     WSACleanup();
     return 0;
@@ -211,8 +225,9 @@ DWORD WINAPI ThreadRecv(LPVOID LP)
     while (1) {
         // Get an initial buffer
         memset(recvbuf, 0, sizeof(recvbuf));
-        int iResult = recv(ConnectSocket,
-            &recvbuf,
+        int iResult = recv(
+            ConnectSocket,
+            recvbuf,
             sizeof(recvbuf),
             0);
 
@@ -220,10 +235,10 @@ DWORD WINAPI ThreadRecv(LPVOID LP)
             // Check on a file message
             if (strncmp(recvbuf, "file-", strlen("file-")) == 0) {
                 // Get file size
-                int size = 0;
+                long int size = 0;
                 iResult = recv(ConnectSocket,
-                    &size,
-                    sizeof(int),
+                    (char*)&size,
+                    sizeof(size),
                     0);
                 printf("\n\t\tsize: %d\n", size);
 
@@ -253,7 +268,7 @@ DWORD WINAPI ThreadRecv(LPVOID LP)
                     int ReturnCheck = 0;
                     while (size > 0) {
                         ReturnCheck = recv(ConnectSocket,
-                            &buff_file,
+                            buff_file,
                             sizeof(buff_file),
                             NULL);
 
@@ -267,7 +282,7 @@ DWORD WINAPI ThreadRecv(LPVOID LP)
                         BOOL right = WriteFile(
                             newFile, // HANDLE OF FILE
                             buff_file, // BUFFER FOR WRITE
-                            sizeof(buff_file), // SIZE OF FILE
+                            ReturnCheck, // 
                             &ReturnCheck, // BYTES WRITTEN
                             NULL); // IVERLOPED
 
@@ -279,9 +294,9 @@ DWORD WINAPI ThreadRecv(LPVOID LP)
                            //SetFilePointer(newFile, ReturnCheck,
                            //    NULL, FILE_CURRENT);
 
-                        printf("\t\tWrite file!\n");
-                        for (int j = 0; j < ReturnCheck; j++)
-                            printf("%0X", buff_file[j]);
+                        printf("\t\tWrite file! size: %d\n", ReturnCheck);
+                        //for (int j = 0; j < ReturnCheck; j++)
+                        //    printf("%0X", buff_file[j]);
 
                         size -= ReturnCheck;
                         memset(buff_file, 0, ReturnCheck);
