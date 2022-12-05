@@ -32,84 +32,24 @@ DWORD WINAPI client(LPVOID lp)
     BOOL iResult_ = TRUE;
     SOCKET client;
     memcpy(&client, lp, sizeof(SOCKET));
+    int nSock;
+    if (ClientSocket[0] == client)
+        nSock = 1;
+    else
+        nSock = 0;
 
     while (isRunning_ == TRUE) {
 
         int iResult = recv(client,
             recvbuf, sizeof(recvbuf), 0);
 
-        if (ClientSocket[1] != INVALID_SOCKET && iResult > 0 ) {
-            /*// Check on a file message
-            if (strncmp(recvbuf, "file-", strlen("file-")) == 0) {
-                
-                if (ClientSocket[1] != INVALID_SOCKET)
-                    if (ClientSocket[0] == client)
-                        iResult = send(ClientSocket[1], recvbuf,
-                            sizeof(recvbuf), 0);
-                    else
-                        iResult = send(ClientSocket[0], recvbuf,
-                            sizeof(recvbuf), 0);
+        if (ClientSocket[nSock] != INVALID_SOCKET && iResult > 0) {
 
-                // Get file size
-                long long int size = 0;
-                iResult = recv(client,
-                    &size,
-                    sizeof(long long int),
-                    0);
+            printf_s("Client [%d] message\n",
+                client);
 
-                if (iResult > 0 && size > 0) {
-                    char buff_file[SIZE_PART_FILE] = { 0 };
-
-                    if (ClientSocket[1] != INVALID_SOCKET)
-                        if (ClientSocket[0] == client)
-                            iResult = send(ClientSocket[1], size,
-                                sizeof(size), 0);
-                        else
-                            iResult = send(ClientSocket[0], size,
-                                sizeof(size), 0);
-
-                    // get the file from server
-                    int ReturnCheck = 0;
-                    while (size > 0) {
-                        ReturnCheck = recv(client,
-                            &buff_file,
-                            sizeof(buff_file),
-                            NULL);
-
-                        ReturnCheck = recv(client, &buff_file,
-                            sizeof(buff_file), 0);
-
-                        if (ReturnCheck == SOCKET_ERROR) {
-                            printf("recv failed with error: %d\n",
-                                WSAGetLastError());
-                            break;
-                        }
-                        size -= ReturnCheck;
-
-                        if (ClientSocket[1] != INVALID_SOCKET)
-                            if (ClientSocket[0] == client)
-                                ReturnCheck = send(ClientSocket[1], buff_file,
-                                    sizeof(buff_file), 0);
-                            else
-                                ReturnCheck = send(ClientSocket[0], buff_file,
-                                    sizeof(buff_file), 0);
-
-                        size -= ReturnCheck;
-
-                        ReturnCheck = 0;
-                        memset(buff_file, 0, ReturnCheck);
-                    }
-                }
-            }*/
-                printf_s("Client [%d] message\n",
-                    client);
-
-                    if (ClientSocket[0] == client)
-                        iResult_ = send(ClientSocket[1], recvbuf,
-                            sizeof(recvbuf), 0);
-                    else
-                        iResult_ = send(ClientSocket[0], recvbuf,
-                            sizeof(recvbuf), 0);
+            iResult_ = send(ClientSocket[nSock], recvbuf,
+                iResult, 0);
 
         }
         else if (iResult_ == 0) {
@@ -123,11 +63,8 @@ DWORD WINAPI client(LPVOID lp)
         }
         memset(recvbuf, 0, sizeof(recvbuf));
     }
-        if (ClientSocket[0] == client && ClientSocket[0] != NULL)
-            closesocket(ClientSocket[0]);
-        else if (ClientSocket[1] == client && ClientSocket[1] != NULL)
-            closesocket(ClientSocket[1]);
 
+    closesocket(ClientSocket[nSock]);
     return 0;
 }
 

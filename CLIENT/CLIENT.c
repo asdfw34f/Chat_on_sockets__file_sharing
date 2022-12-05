@@ -103,6 +103,7 @@ int __cdecl main(int argc, char** argv)
     if (hThread == INVALID_HANDLE_VALUE)
         goto close;
 
+    // SENDING
     BOOL isRunning_ = TRUE;
     while (isRunning_ == TRUE) {
         printf("Enter message:\n");
@@ -139,9 +140,7 @@ int __cdecl main(int argc, char** argv)
 
                 // file size transfer
                 DWORD dwBytesRead = 0;
-                LARGE_INTEGER lsize;
-                GetFileSizeEx(hFile, &lsize);
-                int size = lsize.QuadPart;
+                int size = GetFileSize(hFile, 0);
 
                 iResult = send(ConnectSocket,
                     (char*)&size,
@@ -158,11 +157,18 @@ int __cdecl main(int argc, char** argv)
 
                 while (size > 0) {
                     memset(buffer, 0, sizeof(buffer));
-                    if (ReadFile(hFile, &buffer, sizeof(buffer), &dwBytesRead, NULL)) {
+
+                    BOOL right = ReadFile(hFile,
+                        buffer,
+                        sizeof(buffer),
+                        &dwBytesRead,
+                        NULL);
+
+                    if (right == TRUE) {
                         printf("\t\tRead file! Size: %d\n", dwBytesRead);
 
-                       //for (int j = 0; j < dwBytesRead; j++)
-                       //    printf("%0X", buff_file[j]);
+                       for (int j = 0; j < dwBytesRead; j++)
+                           printf("%0X", buffer[j]);
 
                         iResult = send(ConnectSocket, buffer, dwBytesRead, 0);
                         if (iResult < 0) {
@@ -170,7 +176,7 @@ int __cdecl main(int argc, char** argv)
                                 GetLastError());
                             break; 
                         }
-                        size = -iResult;
+                        size = size - dwBytesRead;
                         printf("\n");
                     }
                 }
@@ -249,10 +255,10 @@ DWORD WINAPI ThreadRecv(LPVOID LP)
 
                     // CreateFile
                     HANDLE newFile = CreateFileA(buff_file,
-                        GENERIC_WRITE,    // read and write access 
+                        GENERIC_ALL,    // read and write access 
                         0,              // no sharing 
                         NULL,           // default security attributes
-                        CREATE_ALWAYS,  // opens existing pipe 
+                        CREATE_NEW,  // opens existing pipe 
                         0,              // default attributes 
                         0);             // no template file
 
@@ -265,6 +271,7 @@ DWORD WINAPI ThreadRecv(LPVOID LP)
 
                     // get the file from server
                     int ReturnCheck = 0;
+                    int dwWrite = 0;
                     while (size > 0) {
                         ReturnCheck = recv(ConnectSocket,
                             buff_file,
@@ -282,7 +289,7 @@ DWORD WINAPI ThreadRecv(LPVOID LP)
                             newFile, // HANDLE OF FILE
                             buff_file, // BUFFER FOR WRITE
                             ReturnCheck, // 
-                            &ReturnCheck, // BYTES WRITTEN
+                            &dwWrite, // BYTES WRITTEN
                             NULL); // IVERLOPED
 
                         if (right != TRUE) {
@@ -290,16 +297,16 @@ DWORD WINAPI ThreadRecv(LPVOID LP)
                             break;
                         }
 
-                           //SetFilePointer(newFile, ReturnCheck,
-                           //    NULL, FILE_CURRENT);
+                        SetFilePointer(newFile, NULL, NULL, FILE_END);
 
                         printf("\t\tWrite file! size: %d\n", ReturnCheck);
-                        //for (int j = 0; j < ReturnCheck; j++)
-                        //    printf("%0X", buff_file[j]);
+                        for (int j = 0; j < dwWrite; j++)
+                            printf("%0X", buff_file[j]);
 
-                        size -= ReturnCheck;
-                        memset(buff_file, 0, ReturnCheck);
+                        size -= dwWrite;
+                        memset(buff_file, 0, sizeof(buff_file));
                         ReturnCheck = 0;
+                        dwWrite = 0;
                     }
                     ReleaseMutex(resurs);
                     CloseHandle(newFile);
