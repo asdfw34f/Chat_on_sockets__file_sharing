@@ -139,9 +139,10 @@ int __cdecl main(int argc, char** argv)
 
                 // file size transfer
                 DWORD dwBytesRead = 0;
-                long int size = 0;
+                LARGE_INTEGER lsize;
+                GetFileSizeEx(hFile, &lsize);
+                int size = lsize.QuadPart;
 
-                size =+ GetFileSize(hFile, 0);
                 iResult = send(ConnectSocket,
                     (char*)&size,
                     sizeof(size),
@@ -164,15 +165,13 @@ int __cdecl main(int argc, char** argv)
                        //    printf("%0X", buff_file[j]);
 
                         iResult = send(ConnectSocket, buffer, dwBytesRead, 0);
-                        if (iResult > 0) {
-                            size =- iResult;
-                            printf("\n");
-                        }
-                        else {
+                        if (iResult < 0) {
                             printf("error send file to server %d",
                                 GetLastError());
-                            break;
+                            break; 
                         }
+                        size = -iResult;
+                        printf("\n");
                     }
                 }
             }
